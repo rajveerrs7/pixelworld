@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .text-shadow-glow {
+    text-shadow: 0 0 10px rgba(250, 170, 72, 0.5), 0 0 20px rgba(250, 170, 72, 0.3);
+  }
+  .box-shadow-glow {
+    box-shadow: 0 0 15px rgba(250, 170, 72, 0.3), inset 0 0 10px rgba(250, 170, 72, 0.2);
+  }
+  .bg-grid {
+    background-image: radial-gradient(rgba(250, 170, 72, 0.1) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+}
+
+:root {
+  --primary: #FAAA48;
+  --bg-dark: #2F0F03;
+  --empty-pixel: #FFDDAC;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: var(--empty-pixel);
+}
+
+.font-heading {
+  font-family: var(--font-abril);
+}
+
+.font-sans {
+  font-family: var(--font-archivo);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-dark);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(250, 170, 72, 0.3);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(250, 170, 72, 0.6);
+}
