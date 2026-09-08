@@ -1,11 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { mockTerritories } from "../data/mockTerritories";
+import { formatUsd, PRICE_PER_PIXEL_CENTS } from "../lib/pricing";
 
-export default function WorldStats() {
+export default function WorldStats({ territories }) {
   const totalPixels = 1000000;
-  const claimedPixels = mockTerritories.reduce(
+  const claimedPixels = territories.reduce(
     (acc, t) => acc + t.width * t.height,
     0,
   );
@@ -13,7 +13,10 @@ export default function WorldStats() {
 
   const stats = [
     { label: "Total Pixels", value: "1,000,000" },
-    { label: "Potential Value", value: "$1,000,000" },
+    {
+      label: "Potential Value",
+      value: formatUsd(totalPixels * PRICE_PER_PIXEL_CENTS),
+    },
     {
       label: "Pixels Claimed",
       value: new Intl.NumberFormat().format(claimedPixels),

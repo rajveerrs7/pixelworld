@@ -1,3 +1,5 @@
+import { calculatePriceCents } from "./pricing";
+
 export function normalizeRectangle(p1, p2) {
   const left = Math.min(p1.x, p2.x);
   const top = Math.min(p1.y, p2.y);
@@ -70,7 +72,7 @@ export function calculatePixelCount(width, height) {
 }
 
 export function calculatePrice(width, height) {
-  return calculatePixelCount(width, height);
+  return calculatePriceCents(width, height);
 }
 
 export function clampViewport(

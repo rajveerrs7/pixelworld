@@ -26,7 +26,16 @@ export default function TerritoryTooltip({ territory, position }) {
           <h3 className="font-heading text-xl text-[#d2ff4d] mb-1 uppercase tracking-wider">
             {territory.owner}
           </h3>
-          <p className="text-sm text-[#f2ead8]/80 mb-3">{territory.website}</p>
+          {territory.website && (
+            <p className="text-sm text-[#f2ead8]/80 mb-2">
+              {territory.website}
+            </p>
+          )}
+          {territory.description && (
+            <p className="text-xs leading-relaxed text-[#f2ead8]/65 mb-3">
+              {territory.description}
+            </p>
+          )}
           <div className="flex justify-between text-xs border-t border-[#d2ff4d]/20 pt-2">
             <span>
               {numberFormat.format(territory.width * territory.height)} pixels

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { mockTerritories } from "../data/mockTerritories";
 import {
   clampViewport,
   getTerritoryAtPoint,
@@ -22,6 +21,29 @@ import {
 
 const initialTooltip = { x: 0, y: 0, containerWidth: 0, containerHeight: 0 };
 
+function getInitialSelection() {
+  if (typeof window === "undefined") {
+    return { firstPoint: null, currentCursorPoint: null, finalSelection: null };
+  }
+
+  try {
+    const pending = JSON.parse(
+      window.sessionStorage.getItem("pixel_empire_pending_checkout") || "null",
+    );
+    if (pending?.selection) {
+      return {
+        firstPoint: null,
+        currentCursorPoint: null,
+        finalSelection: pending.selection,
+      };
+    }
+  } catch {
+    window.sessionStorage.removeItem("pixel_empire_pending_checkout");
+  }
+
+  return { firstPoint: null, currentCursorPoint: null, finalSelection: null };
+}
+
 function getInitialViewport(width, height) {
   const scale = Math.max(
     MIN_ZOOM,
@@ -34,7 +56,12 @@ function getInitialViewport(width, height) {
   };
 }
 
-export default function PixelWorld({ focusTerritory, externalHoverTerritory }) {
+export default function PixelWorld({
+  focusTerritory,
+  externalHoverTerritory,
+  territories,
+  loading,
+}) {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const viewportRef = useRef({ x: 0, y: 0, scale: 1 });
@@ -43,18 +70,12 @@ export default function PixelWorld({ focusTerritory, externalHoverTerritory }) {
   const dragRef = useRef(null);
   const externalHoverIdRef = useRef(null);
   const interactionRef = useRef({
-    firstPoint: null,
-    currentCursorPoint: null,
-    finalSelection: null,
+    ...getInitialSelection(),
     hoveredId: null,
   });
   const [hoveredTerritory, setHoveredTerritory] = useState(null);
   const [tooltipPos, setTooltipPos] = useState(initialTooltip);
-  const [selection, setSelection] = useState({
-    firstPoint: null,
-    currentCursorPoint: null,
-    finalSelection: null,
-  });
+  const [selection, setSelection] = useState(getInitialSelection);
 
   const requestRender = useCallback(() => {
     if (frameRef.current !== null) return;
@@ -65,12 +86,17 @@ export default function PixelWorld({ focusTerritory, externalHoverTerritory }) {
       if (!canvas || !width || !height) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      drawWorld(ctx, width, height, viewportRef.current, mockTerritories, {
+      drawWorld(ctx, width, height, viewportRef.current, territories, {
         ...interactionRef.current,
         externalHoveredId: externalHoverIdRef.current,
       });
     });
-  }, []);
+  }, [territories]);
+
+  useEffect(() => {
+    interactionRef.current = { ...interactionRef.current, ...selection };
+    requestRender();
+  }, [requestRender, selection]);
 
   const setInteraction = useCallback(
     (next) => {
@@ -103,7 +129,7 @@ export default function PixelWorld({ focusTerritory, externalHoverTerritory }) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (viewportRef.current.x === 0 && viewportRef.current.y === 0)
         viewportRef.current = getInitialViewport(width, height);
-      drawWorld(ctx, width, height, viewportRef.current, mockTerritories, {
+      drawWorld(ctx, width, height, viewportRef.current, territories, {
         ...interactionRef.current,
         externalHoveredId: externalHoverIdRef.current,
       });
@@ -112,7 +138,7 @@ export default function PixelWorld({ focusTerritory, externalHoverTerritory }) {
     observer.observe(container);
     resize();
     return () => observer.disconnect();
-  }, [requestRender]);
+  }, [requestRender, territories]);
 
   useEffect(
     () => () => {
@@ -218,10 +244,17 @@ export default function PixelWorld({ focusTerritory, externalHoverTerritory }) {
 
       const current = interactionRef.current;
       if (current.firstPoint && !current.finalSelection) {
-        interactionRef.current = { ...current, currentCursorPoint: clamped };
+        const selectionPoint = {
+          x: Math.max(current.firstPoint.x, clamped.x),
+          y: Math.max(current.firstPoint.y, clamped.y),
+        };
+        interactionRef.current = {
+          ...current,
+          currentCursorPoint: selectionPoint,
+        };
         setSelection((previous) => ({
           ...previous,
-          currentCursorPoint: clamped,
+          currentCursorPoint: selectionPoint,
         }));
         requestRender();
         return;
@@ -232,7 +265,7 @@ export default function PixelWorld({ focusTerritory, externalHoverTerritory }) {
         point.x < WORLD_SIZE &&
         point.y >= 0 &&
         point.y < WORLD_SIZE
-          ? getTerritoryAtPoint(point, mockTerritories)
+          ? getTerritoryAtPoint(point, territories)
           : null;
       if ((nextTerritory?.id ?? null) !== current.hoveredId) {
         setInteraction({ hoveredId: nextTerritory?.id ?? null });
@@ -249,7 +282,7 @@ export default function PixelWorld({ focusTerritory, externalHoverTerritory }) {
           });
       }
     },
-    [requestRender, screenToWorld, setInteraction],
+    [requestRender, screenToWorld, setInteraction, territories],
   );
 
   const handlePointerUp = useCallback(
@@ -267,7 +300,7 @@ export default function PixelWorld({ focusTerritory, externalHoverTerritory }) {
       )
         return;
       const current = interactionRef.current;
-      if (current.finalSelection || getTerritoryAtPoint(point, mockTerritories))
+      if (current.finalSelection || getTerritoryAtPoint(point, territories))
         return;
       if (!current.firstPoint) {
         const next = {
@@ -282,10 +315,16 @@ export default function PixelWorld({ focusTerritory, externalHoverTerritory }) {
           finalSelection: null,
         });
       } else {
-        const rectangle = getSelectionRectangle(current.firstPoint, point);
+        const selectionPoint = {
+          x: Math.max(current.firstPoint.x, point.x),
+          y: Math.max(current.firstPoint.y, point.y),
+        };
+        const rectangle = getSelectionRectangle(
+          current.firstPoint,
+          selectionPoint,
+        );
         if (
-          isSelectionValid(rectangle, mockTerritories, WORLD_SIZE, WORLD_SIZE)
-            .valid
+          isSelectionValid(rectangle, territories, WORLD_SIZE, WORLD_SIZE).valid
         ) {
           interactionRef.current = {
             ...current,
@@ -315,7 +354,7 @@ export default function PixelWorld({ focusTerritory, externalHoverTerritory }) {
       setHoveredTerritory(null);
       requestRender();
     },
-    [requestRender, screenToWorld, setInteraction],
+    [requestRender, screenToWorld, setInteraction, territories],
   );
 
   const zoomAt = useCallback(
@@ -373,6 +412,14 @@ export default function PixelWorld({ focusTerritory, externalHoverTerritory }) {
     zoomAt(viewportRef.current.scale / 1.5, width / 2, height / 2);
   }, [zoomAt]);
 
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        Loading world...
+      </div>
+    );
+  }
+
   return (
     <div
       className="relative w-full h-[72vh] min-h-[540px] bg-[#e9e4d6] rounded-[1.25rem] overflow-hidden shadow-2xl border border-[#d2ff4d]/30 box-shadow-glow"
@@ -399,7 +446,7 @@ export default function PixelWorld({ focusTerritory, externalHoverTerritory }) {
         firstPoint={selection.firstPoint}
         currentCursorPoint={selection.currentCursorPoint}
         finalSelection={selection.finalSelection}
-        territories={mockTerritories}
+        territories={territories}
         onCancel={cancelSelection}
       />
     </div>

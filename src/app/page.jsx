@@ -5,12 +5,14 @@ import Hero from "../components/Hero";
 import WorldStats from "../components/WorldStats";
 import PixelWorld from "../components/PixelWorld";
 import Leaderboard from "../components/Leaderboard";
-
+import { useEffect } from "react";
 import { useState, useCallback } from "react";
 
 export default function Page() {
   const [focusTerritory, setFocusTerritory] = useState(null);
   const [hoverTerritory, setHoverTerritory] = useState(null);
+  const [territories, setTerritories] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const handleLeaderboardClick = useCallback((territory) => {
     setFocusTerritory(territory);
@@ -18,6 +20,32 @@ export default function Page() {
     document.getElementById("explore")?.scrollIntoView({ behavior: "smooth" });
     // Reset focus after a short delay so clicking again works
     setTimeout(() => setFocusTerritory(null), 100);
+  }, []);
+
+  useEffect(() => {
+    async function loadTerritories() {
+      try {
+        const res = await fetch("/api/territories");
+
+        if (!res.ok) {
+          throw new Error(`Backend returned HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        if (!Array.isArray(data.territories)) {
+          throw new Error("Backend response is missing a territories array");
+        }
+
+        setTerritories(data.territories);
+      } catch (error) {
+        console.error(error);
+        setTerritories([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadTerritories();
   }, []);
 
   return (
@@ -50,15 +78,19 @@ export default function Page() {
           <PixelWorld
             focusTerritory={focusTerritory}
             externalHoverTerritory={hoverTerritory}
+            territories={territories}
+            loading={loading}
           />
         </div>
       </div>
 
-      <WorldStats />
+      <WorldStats territories={territories} />
 
       <Leaderboard
         onSelectTerritory={handleLeaderboardClick}
         onHoverTerritory={setHoverTerritory}
+        territories={territories}
+        loading={loading}
       />
 
       <footer
