@@ -108,6 +108,32 @@ export default function Page() {
           </div>
           <div className="text-xs text-[#f2ead8]/40 uppercase tracking-[0.2em] md:text-right">
             Atlas online / 2026
+            <nav className="mt-4 flex flex-row justify-evenly gap-y-2 normal-case tracking-normal md:justify-end">
+              <a
+                className="text-[#f2ead8]/45 hover:text-[#d2ff4d]"
+                href="/terms"
+              >
+                Terms
+              </a>
+              <a
+                className="text-[#f2ead8]/45   hover:text-[#d2ff4d]"
+                href="/privacy"
+              >
+                Privacy
+              </a>
+              <a
+                className="text-[#f2ead8]/45 hover:text-[#d2ff4d]"
+                href="/refund-policy"
+              >
+                Refunds
+              </a>
+              <a
+                className="text-[#f2ead8]/45 hover:text-[#d2ff4d]"
+                href="/contact"
+              >
+                Contact
+              </a>
+            </nav>
           </div>
         </div>
       </footer>
