@@ -67,9 +67,17 @@ export async function getDodoWebhookPayload() {
   return null;
 }
 
+export function getDodoWebhookSecret() {
+  return (
+    process.env.DODO_PAYMENTS_WEBHOOK_KEY ||
+    process.env.DODO_PAYMENTS_WEBHOOK_SECRET ||
+    process.env.DODO_WEBHOOK_SECRET ||
+    null
+  );
+}
+
 export function verifyDodoSignature(rawBody, { id, timestamp, signature }) {
-  const secret =
-    process.env.DODO_PAYMENTS_WEBHOOK_SECRET || process.env.DODO_WEBHOOK_SECRET;
+  const secret = getDodoWebhookSecret();
   if (!secret || !id || !timestamp || !signature) return false;
 
   const timestampNumber = Number(timestamp);
