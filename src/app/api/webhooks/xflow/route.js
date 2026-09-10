@@ -7,6 +7,7 @@ import {
   verifyXflowSignature,
 } from "@/lib/xflow";
 import { majorUnitToCents } from "@/lib/pricing";
+import { deleteTerritoriesCache } from "@/lib/redis";
 
 export const dynamic = "force-dynamic";
 
@@ -113,7 +114,8 @@ export async function POST(request) {
         .where(eq(payments.orderId, orderId))
         .limit(1);
       if (!reservation || !payment) throw new Error("PAYMENT_RECORD_NOT_FOUND");
-      if (payment.status !== "processing") throw new Error("PAYMENT_NOT_PENDING");
+      if (payment.status !== "processing")
+        throw new Error("PAYMENT_NOT_PENDING");
       const [expiredReservation] = await tx
         .select({ id: reservations.id })
         .from(reservations)
@@ -180,6 +182,10 @@ export async function POST(request) {
         .where(eq(reservations.id, reservation.id));
       return { alreadyProcessed: false };
     });
+
+    if (!result.alreadyProcessed) {
+      await deleteTerritoriesCache();
+    }
 
     return Response.json({ received: true, ...result });
   } catch (error) {
