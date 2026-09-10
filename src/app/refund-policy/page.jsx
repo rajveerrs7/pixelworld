@@ -22,11 +22,11 @@ export default function RefundPolicyPage() {
       </LegalSection>
       <LegalSection title="2. Payment processing">
         <p>
-          Payment is processed by Xflow. Pixel Empire does not treat a payment
-          as a completed purchase merely because a checkout page was opened or a
-          payment attempt was started. A purchase becomes final only after the
-          payment provider confirms the payment and Pixel Empire confirms the
-          order while the reservation is still active.
+          Payment is processed by Dodo Payments. Pixel Empire does not treat a
+          payment as a completed purchase merely because a checkout page was
+          opened or a payment attempt was started. A purchase becomes final only
+          after the payment provider confirms the payment and Pixel Empire
+          confirms the order while the reservation is still active.
         </p>
       </LegalSection>
       <LegalSection title="3. When a refund may be requested">

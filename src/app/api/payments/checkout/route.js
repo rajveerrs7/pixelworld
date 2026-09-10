@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { orders, payments, reservations } from "@/db/schema";
 import { and, eq, sql } from "drizzle-orm";
-import { createXflowCheckout } from "@/lib/xflow";
+import { createDodoCheckout } from "@/lib/dodo";
 import { CURRENCY } from "@/lib/pricing";
 import { requireUser, requireSameOrigin } from "@/lib/auth";
 
@@ -98,10 +98,11 @@ export async function POST(request) {
     });
     let checkout;
     try {
-      checkout = await createXflowCheckout({
+      checkout = await createDodoCheckout({
         orderId,
         amount: order.amount,
         currency: order.currency,
+        customerEmail: user.email,
       });
     } catch (error) {
       await db
@@ -139,6 +140,9 @@ export async function POST(request) {
       );
     }
     console.error("Checkout creation failed:", error);
-    return Response.json({ error: "Failed to create checkout" }, { status: 503 });
+    return Response.json(
+      { error: "Failed to create checkout" },
+      { status: 503 },
+    );
   }
 }

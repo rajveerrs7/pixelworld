@@ -19,7 +19,7 @@ const statusCopy = {
   },
   payment_pending: {
     title: "Payment processing",
-    body: "We are waiting for payment confirmation from Xflow.",
+    body: "We are waiting for payment confirmation from Dodo Payments.",
     Icon: Clock3,
   },
   expired: {

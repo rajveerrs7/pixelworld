@@ -127,7 +127,7 @@ export const payments = pgTable(
       .notNull()
       .references(() => orders.id),
 
-    provider: text("provider").default("xflow").notNull(),
+    provider: text("provider").default("dodo").notNull(),
     providerPaymentId: text("provider_payment_id"),
 
     status: paymentStatus("status").default("pending").notNull(),
@@ -148,12 +148,13 @@ export const payments = pgTable(
   ],
 );
 
-
 export const sessions = pgTable(
   "sessions",
   {
     id: text("id").primaryKey(),
-    userId: text("user_id").notNull().references(() => users.id),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
     tokenHash: text("token_hash").notNull().unique(),
     expiresAt: timestamp("expires_at").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),

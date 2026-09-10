@@ -1,12 +1,7 @@
 import { db } from "@/db";
 import { orders, payments, reservations, territories } from "@/db/schema";
-import { and, eq, sql } from "drizzle-orm";
-import {
-  getXflowEventValue,
-  getXflowReceivable,
-  verifyXflowSignature,
-} from "@/lib/xflow";
-import { majorUnitToCents } from "@/lib/pricing";
+import { and, eq, or, sql } from "drizzle-orm";
+import { getDodoEventValue, verifyDodoSignature } from "@/lib/dodo";
 import { deleteTerritoriesCache } from "@/lib/redis";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +10,7 @@ export async function POST(request) {
   const rawBody = await request.text();
   const signature = request.headers.get("webhook-signature");
   if (
-    !verifyXflowSignature(rawBody, {
+    !verifyDodoSignature(rawBody, {
       id: request.headers.get("webhook-id"),
       timestamp: request.headers.get("webhook-timestamp"),
       signature,
@@ -29,50 +24,40 @@ export async function POST(request) {
 
   try {
     const event = JSON.parse(rawBody);
-    const linkedId = getXflowEventValue(event, ["linked_id", "linkedId"]);
-    let orderId = getXflowEventValue(event, ["orderId", "order_id"]);
-    let providerPaymentId =
-      linkedId ||
-      getXflowEventValue(event, [
-        "paymentId",
-        "payment_id",
-        "sessionId",
-        "session_id",
-        "id",
-      ]);
-    const status = String(
-      getXflowEventValue(event, ["type", "event", "status"]) || "",
+    const eventType = String(
+      getDodoEventValue(event, ["type"]) || "",
     ).toLowerCase();
-    let amount = getXflowEventValue(event, ["amount", "value"]);
-    let currency = getXflowEventValue(event, ["currency", "currency_code"]);
-    let receivable;
-
-    if (
-      linkedId &&
-      (status === "receivable.status.completed" ||
-        !orderId ||
-        !amount ||
-        !currency)
-    ) {
-      receivable = await getXflowReceivable(linkedId);
-      orderId = orderId || receivable.metadata?.orderId;
-      amount =
-        amount || receivable.amount || receivable.amount_maximum_reconcilable;
-      currency = currency || receivable.currency;
+    if (eventType !== "payment.succeeded") {
+      return Response.json(
+        { error: "Unsupported payment event" },
+        { status: 400 },
+      );
     }
 
-    amount = majorUnitToCents(amount);
+    const paymentId = getDodoEventValue(event, [
+      "payment_id",
+      "paymentId",
+      "checkout_session_id",
+      "checkoutSessionId",
+      "id",
+    ]);
+    const orderId =
+      getDodoEventValue(event, [
+        "orderId",
+        "order_id",
+        "metadata.orderId",
+        "metadata.order_id",
+      ]) || null;
+    const amount = getDodoEventValue(event, [
+      "total_amount",
+      "amount",
+      "value",
+    ]);
+    const currency = String(
+      getDodoEventValue(event, ["currency", "currency_code"]) || "",
+    ).toUpperCase();
 
-    if (
-      !orderId ||
-      !providerPaymentId ||
-      ![
-        "paid",
-        "succeeded",
-        "payment.succeeded",
-        "receivable.status.completed",
-      ].includes(status)
-    ) {
+    if (!orderId && !paymentId) {
       return Response.json(
         { error: "Unsupported payment event" },
         { status: 400 },
@@ -82,40 +67,55 @@ export async function POST(request) {
     const result = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(987654321)`);
 
+      let paymentQuery = tx
+        .select()
+        .from(payments)
+        .where(eq(payments.provider, "dodo"));
+
+      if (orderId) {
+        paymentQuery = paymentQuery.where(
+          or(
+            eq(payments.orderId, orderId),
+            eq(payments.providerPaymentId, paymentId || ""),
+          ),
+        );
+      } else {
+        paymentQuery = paymentQuery.where(
+          eq(payments.providerPaymentId, paymentId),
+        );
+      }
+
+      const [payment] = await paymentQuery.limit(1);
+      if (!payment) throw new Error("PAYMENT_RECORD_NOT_FOUND");
+
       const [order] = await tx
         .select()
         .from(orders)
-        .where(eq(orders.id, orderId))
+        .where(eq(orders.id, payment.orderId))
         .limit(1);
       if (!order) throw new Error("ORDER_NOT_FOUND");
       if (order.status === "paid") return { alreadyProcessed: true };
       if (!order.userId) throw new Error("ORDER_OWNER_MISSING");
 
+      const normalizedAmount = Number(amount);
       const directPaymentMatches =
-        amount === order.amount && currency === order.currency;
-      const convertedPaymentMatches =
-        status === "receivable.status.completed" &&
-        receivable?.status === "completed" &&
-        receivable.currency === order.currency &&
-        majorUnitToCents(receivable.amount_maximum_reconcilable) ===
-          order.amount;
-      if (!directPaymentMatches && !convertedPaymentMatches) {
+        Number.isFinite(normalizedAmount) &&
+        normalizedAmount === order.amount &&
+        currency === order.currency;
+      const paymentMismatch = !directPaymentMatches;
+      if (paymentMismatch) {
         throw new Error("PAYMENT_MISMATCH");
       }
 
       const [reservation] = await tx
         .select()
         .from(reservations)
-        .where(eq(reservations.orderId, orderId))
+        .where(eq(reservations.orderId, order.id))
         .limit(1);
-      const [payment] = await tx
-        .select()
-        .from(payments)
-        .where(eq(payments.orderId, orderId))
-        .limit(1);
-      if (!reservation || !payment) throw new Error("PAYMENT_RECORD_NOT_FOUND");
+      if (!reservation) throw new Error("PAYMENT_RECORD_NOT_FOUND");
       if (payment.status !== "processing")
         throw new Error("PAYMENT_NOT_PENDING");
+
       const [expiredReservation] = await tx
         .select({ id: reservations.id })
         .from(reservations)
@@ -134,7 +134,7 @@ export async function POST(request) {
         await tx
           .update(orders)
           .set({ status: "expired" })
-          .where(eq(orders.id, orderId));
+          .where(eq(orders.id, order.id));
         throw new Error("RESERVATION_EXPIRED");
       }
 
@@ -153,7 +153,7 @@ export async function POST(request) {
       if (conflict.length) throw new Error("TERRITORY_OCCUPIED");
 
       await tx.insert(territories).values({
-        id: `territory-${orderId}`,
+        id: `territory-${order.id}`,
         ownerId: order.userId,
         owner: reservation.owner || "Pixel Empire User",
         website: reservation.website,
@@ -167,7 +167,7 @@ export async function POST(request) {
       await tx
         .update(payments)
         .set({
-          providerPaymentId,
+          providerPaymentId: paymentId || payment.providerPaymentId,
           status: "succeeded",
           updatedAt: new Date(),
         })
@@ -175,7 +175,7 @@ export async function POST(request) {
       await tx
         .update(orders)
         .set({ status: "paid", paidAt: new Date() })
-        .where(eq(orders.id, orderId));
+        .where(eq(orders.id, order.id));
       await tx
         .update(reservations)
         .set({ status: "completed" })
@@ -202,7 +202,7 @@ export async function POST(request) {
       "Webhook processing failed",
       500,
     ];
-    if (status === 500) console.error("Xflow webhook failed:", error);
+    if (status === 500) console.error("Dodo webhook failed:", error);
     return Response.json({ error: message }, { status });
   }
 }
