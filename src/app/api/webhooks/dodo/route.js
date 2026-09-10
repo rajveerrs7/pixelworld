@@ -34,7 +34,15 @@ export async function POST(request) {
       );
     }
 
-    const discountCode = event?.data?.data?.discounts?.code;
+    const discountCandidates = [
+      event?.data?.discounts,
+      event?.data?.object?.discounts,
+      event?.data?.data?.discounts,
+      event?.data?.object?.data?.discounts,
+    ];
+    const discountCode = discountCandidates
+      .find((entry) => (Array.isArray(entry) ? entry.length : entry))
+      ?.find?.((discount) => discount?.code)?.code;
 
     const paymentId = getDodoEventValue(event, [
       "payment_id",
@@ -55,9 +63,6 @@ export async function POST(request) {
       "amount",
       "value",
     ]);
-    const currency = String(
-      getDodoEventValue(event, ["currency", "currency_code"]) || "",
-    ).toUpperCase();
 
     if (!orderId && !paymentId) {
       return Response.json(
@@ -100,9 +105,12 @@ export async function POST(request) {
       if (!order.userId) throw new Error("ORDER_OWNER_MISSING");
 
       const normalizedAmount = Number(amount);
+      const zeroTestDiscount =
+        String(discountCode || "").toUpperCase() === "ZEROTEST";
       const directPaymentMatches =
         Number.isFinite(normalizedAmount) &&
-        (normalizedAmount === order.amount || discountCode === "ZEROTEST");
+        ((zeroTestDiscount && normalizedAmount === 0) ||
+          (!zeroTestDiscount && normalizedAmount === order.amount));
       const paymentMismatch = !directPaymentMatches;
       if (paymentMismatch) {
         throw new Error("PAYMENT_MISMATCH");

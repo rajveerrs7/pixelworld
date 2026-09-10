@@ -2,7 +2,6 @@ import { db } from "@/db";
 import { orders, payments, reservations } from "@/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { createDodoCheckout } from "@/lib/dodo";
-import { CURRENCY } from "@/lib/pricing";
 import { requireUser, requireSameOrigin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -26,15 +25,6 @@ export async function POST(request) {
       .limit(1);
     if (!order)
       return Response.json({ error: "Order not found" }, { status: 404 });
-    if (order.currency !== CURRENCY) {
-      return Response.json(
-        {
-          error:
-            "Order currency is no longer supported; create a new reservation",
-        },
-        { status: 409 },
-      );
-    }
 
     const [reservation] = await db
       .select()
