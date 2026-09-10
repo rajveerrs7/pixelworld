@@ -26,7 +26,7 @@ export async function createDodoCheckout({
     throw new Error("DODO_PRODUCT_ID is not configured");
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://pixel-empire.lol";
   const resultUrl = `${appUrl}/payment/result?orderId=${encodeURIComponent(orderId)}`;
 
   const response = await client.checkoutSessions.create({
